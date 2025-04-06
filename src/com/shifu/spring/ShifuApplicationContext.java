@@ -2,6 +2,8 @@ package com.shifu.spring;
 
 import java.beans.Introspector;
 import java.io.File;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,7 +34,7 @@ public class ShifuApplicationContext {
                 File[] files = file.listFiles();
                 for (File f : files) {
                     String fileName = f.getAbsolutePath();
-                    System.out.println(fileName);
+                    //System.out.println(fileName);
                     if(fileName.endsWith(".class")){
                         String className = fileName.substring(fileName.indexOf("com"), fileName.indexOf(".class"));
                         className = className.replace("/", ".");
@@ -101,7 +103,24 @@ public class ShifuApplicationContext {
     private Object createBean(String beanName, BeanDefinition beanDefinition) {
         Class clazz = beanDefinition.getType();
         try {
+            //实例化
             Object instance = clazz.getConstructor().newInstance();
+            //依赖注入
+            for (Field f : clazz.getDeclaredFields()) {
+                if (f.isAnnotationPresent(Autowired.class)) {
+                    f.setAccessible(true);
+                    f.set(instance,getBean(f.getName()));
+                }
+            }
+            // Aware
+            if(instance instanceof BeanNameAware){
+                ((BeanNameAware)instance).setBeanName(beanName);
+            }
+            //初始化
+            if(instance instanceof InitializingBean){
+                ((InitializingBean)instance).afterPropertiesSet();
+            }
+            //BeanPostProcess 初始化后 AOP
             return instance;
         } catch (InstantiationException e) {
             throw new RuntimeException(e);

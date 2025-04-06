@@ -12,8 +12,7 @@ public class Test {
     public static void main(String[] args) {
         ShifuApplicationContext shifuApplicationContext = new ShifuApplicationContext(AppConfig.class);
 
-        //UserService userService = (UserService) shifuApplicationContext.getBean("userService");
-        System.out.println(shifuApplicationContext.getBean("userService"));
-        System.out.println(shifuApplicationContext.getBean("userService"));
+        UserService userService = (UserService) shifuApplicationContext.getBean("userService");
+        userService.test();
     }
 }
