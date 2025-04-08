@@ -6,6 +6,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -19,6 +20,8 @@ public class ShifuApplicationContext {
     
     private ConcurrentHashMap<String,BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>();
     private ConcurrentHashMap<String,Object> singletonObjects = new ConcurrentHashMap<>();
+
+    private ArrayList<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
 
     public ShifuApplicationContext(Class appconfigClass) {
         this.configClass = appconfigClass;
@@ -43,6 +46,10 @@ public class ShifuApplicationContext {
                             Class<?> clazz = classLoader.loadClass(className);
                             if(clazz.isAnnotationPresent(Component.class)){
                                 Component componentAnnotation = clazz.getAnnotation(Component.class);
+                                if(BeanPostProcessor.class.isAssignableFrom(clazz)){
+                                    BeanPostProcessor beanPostProcessor = (BeanPostProcessor) clazz.newInstance();
+                                    beanPostProcessorList.add(beanPostProcessor);
+                                }
                                 String beanName = componentAnnotation.value();
                                 if(beanName.equals("")){
                                     beanName = Introspector.decapitalize(clazz.getSimpleName());
@@ -51,6 +58,10 @@ public class ShifuApplicationContext {
                                 beanDefinitionMap.put(beanName,beanDefinition);
                             }
                         } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        } catch (InstantiationException e) {
+                            throw new RuntimeException(e);
+                        } catch (IllegalAccessException e) {
                             throw new RuntimeException(e);
                         }
                     }
@@ -112,15 +123,25 @@ public class ShifuApplicationContext {
                     f.set(instance,getBean(f.getName()));
                 }
             }
-            // Aware
+            // Aware回调
             if(instance instanceof BeanNameAware){
                 ((BeanNameAware)instance).setBeanName(beanName);
             }
+
+            for(BeanPostProcessor beanPostProcessor: beanPostProcessorList){
+                instance = beanPostProcessor.postProcessBeforeInitialization(beanName, instance);
+            }
+
             //初始化
             if(instance instanceof InitializingBean){
                 ((InitializingBean)instance).afterPropertiesSet();
             }
             //BeanPostProcess 初始化后 AOP
+            //利用这个process机制可以处理我们的bean
+            for(BeanPostProcessor beanPostProcessor : beanPostProcessorList){
+                instance = beanPostProcessor.postProcessAfterInitialization(beanName,instance);
+            }
+
             return instance;
         } catch (InstantiationException e) {
             throw new RuntimeException(e);
